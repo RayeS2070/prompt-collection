@@ -43,7 +43,7 @@
       "description": "AddressSanitizer + UBSan. The environment reaches build and test runs made through presets, not a binary started by hand.",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "SMC_SANITIZE": true
+        "PROMPT_COLLECTION_SANITIZE": true
       },
       "environment": {
         "ASAN_OPTIONS": "detect_leaks=1",
@@ -181,7 +181,7 @@
       ]
     },
     {
-      "name": "linux_clang_debug",
+      "name": "clang_debug",
       "configurePreset": "clang_debug",
       "inherits": [
         "linux"
