@@ -1,5 +1,5 @@
-#ifndef PROMPT_COLLECTION_SRC_APP_ACTION_HPP
-#define PROMPT_COLLECTION_SRC_APP_ACTION_HPP
+#ifndef PROMPT_COLLECTION_APP_ACTION_HPP
+#define PROMPT_COLLECTION_APP_ACTION_HPP
 
 #include <string>
 #include <variant>
@@ -23,7 +23,7 @@ struct NewPrompt {};
 
 // Opens the editor on a stored prompt.
 struct Select {
-  model::PromptId id;
+  model::PromptId id = 0;
 };
 
 // Stores the prompt: a new one when its id is 0.
@@ -32,7 +32,7 @@ struct Save {
 };
 
 struct Delete {
-  model::PromptId id;
+  model::PromptId id = 0;
 };
 
 }  // namespace action
@@ -42,4 +42,4 @@ using Action = std::variant<action::SetFilter, action::NewPrompt,
 
 }  // namespace app
 
-#endif  // PROMPT_COLLECTION_SRC_APP_ACTION_HPP
+#endif  // PROMPT_COLLECTION_APP_ACTION_HPP

@@ -3,11 +3,18 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <expected>
 #include <filesystem>
+#include <format>
+#include <memory>
 #include <print>
+#include <span>
+#include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "app/action.hpp"
@@ -19,6 +26,49 @@ namespace {
 
 constexpr int kWidth = 1100;
 constexpr int kHeight = 700;
+
+// A unique_ptr deleter that calls an SDL destroy function.
+template <auto destroy>
+struct Destroy {
+  auto operator()(auto* handle) const -> void { destroy(handle); }
+};
+using Window = std::unique_ptr<SDL_Window, Destroy<SDL_DestroyWindow>>;
+using Renderer = std::unique_ptr<SDL_Renderer, Destroy<SDL_DestroyRenderer>>;
+
+// SDL_Quit on every way out of main once SDL_Init was called, failed or not:
+// SDL_Quit is safe after a failed SDL_Init.
+class SdlQuit {
+ public:
+  SdlQuit() = default;
+  SdlQuit(const SdlQuit&) = delete;
+  auto operator=(const SdlQuit&) -> SdlQuit& = delete;
+  ~SdlQuit() { SDL_Quit(); }
+};
+
+// The ImGui context with its SDL3 backends, shut down in reverse order.
+// The window and the renderer must outlive it.
+class ImGuiSession {
+ public:
+  ImGuiSession(SDL_Window* window, SDL_Renderer* renderer, float scale) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(scale);
+    style.FontScaleDpi = scale;
+    // Both always return true in ImGui 1.93.
+    ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+    ImGui_ImplSDLRenderer3_Init(renderer);
+  }
+  ImGuiSession(const ImGuiSession&) = delete;
+  auto operator=(const ImGuiSession&) -> ImGuiSession& = delete;
+  ~ImGuiSession() {
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+  }
+};
 
 // $XDG_DATA_HOME/pcollect/prompts.db, by default under ~/.local/share.
 auto defaultDatabasePath() -> std::filesystem::path {
@@ -33,61 +83,77 @@ auto defaultDatabasePath() -> std::filesystem::path {
   return base / "pcollect" / "prompts.db";
 }
 
+// Opens the database, creating its directory first.
+auto openStore(const std::filesystem::path& path)
+    -> std::expected<model::PromptStore, std::string> {
+  if (path.has_parent_path()) {
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    if (error) {
+      return std::unexpected(std::format("cannot create {}: {}",
+                                         path.parent_path().string(),
+                                         error.message()));
+    }
+  }
+  return model::PromptStore::open(path.string());
+}
+
+// Draws one frame and returns what the user asked for in it.
+auto drawFrame(SDL_Renderer* renderer, const app::AppState& state,
+               view::Drafts& drafts) -> std::vector<app::Action> {
+  ImGui_ImplSDLRenderer3_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  ImGui::NewFrame();
+  std::vector<app::Action> actions;
+  view::drawMainWindow(state, drafts, actions);
+  ImGui::Render();
+
+  const ImGuiIO& io = ImGui::GetIO();
+  SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x,
+                     io.DisplayFramebufferScale.y);
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+  SDL_RenderClear(renderer);
+  ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
+  SDL_RenderPresent(renderer);
+  return actions;
+}
+
 }  // namespace
 
 // Usage: prompt_collection [DATABASE]
 auto main(int argc, char** argv) -> int {
-  const std::filesystem::path path =
-      argc > 1 ? std::filesystem::path(argv[1]) : defaultDatabasePath();
-  std::error_code error;
-  if (path.has_parent_path()) {
-    std::filesystem::create_directories(path.parent_path(), error);
-  }
-  if (error) {
-    std::println(stderr, "cannot create {}: {}", path.parent_path().string(),
-                 error.message());
-    return EXIT_FAILURE;
-  }
-  auto store = model::PromptStore::open(path.string());
+  const std::span args(argv, static_cast<std::size_t>(argc));
+  auto store = openStore(args.size() > 1 ? std::filesystem::path(args[1])
+                                         : defaultDatabasePath());
   if (!store) {
     std::println(stderr, "{}", store.error());
     return EXIT_FAILURE;
   }
   app::Controller controller(std::move(*store));
 
+  const SdlQuit sdlQuit;
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     std::println(stderr, "SDL_Init: {}", SDL_GetError());
     return EXIT_FAILURE;
   }
   const float scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
-  SDL_Window* window =
+  const Window window(
       SDL_CreateWindow("Prompt collection", static_cast<int>(kWidth * scale),
                        static_cast<int>(kHeight * scale),
-                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-  if (window == nullptr) {
+                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY));
+  if (!window) {
     std::println(stderr, "SDL_CreateWindow: {}", SDL_GetError());
     return EXIT_FAILURE;
   }
-  SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
-  if (renderer == nullptr) {
+  const Renderer renderer(SDL_CreateRenderer(window.get(), nullptr));
+  if (!renderer) {
     std::println(stderr, "SDL_CreateRenderer: {}", SDL_GetError());
     return EXIT_FAILURE;
   }
-  SDL_SetRenderVSync(renderer, 1);
-
-  IMGUI_CHECKVERSION();
-  ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO();
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  ImGui::StyleColorsDark();
-  ImGuiStyle& style = ImGui::GetStyle();
-  style.ScaleAllSizes(scale);
-  style.FontScaleDpi = scale;
-  ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
-  ImGui_ImplSDLRenderer3_Init(renderer);
+  SDL_SetRenderVSync(renderer.get(), 1);
+  const ImGuiSession imgui(window.get(), renderer.get(), scale);
 
   view::Drafts drafts;
-  std::vector<app::Action> actions;
   bool done = false;
   while (!done) {
     SDL_Event event;
@@ -95,34 +161,15 @@ auto main(int argc, char** argv) -> int {
       ImGui_ImplSDL3_ProcessEvent(&event);
       if (event.type == SDL_EVENT_QUIT) done = true;
     }
-    if ((SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED) != 0) {
+    if ((SDL_GetWindowFlags(window.get()) & SDL_WINDOW_MINIMIZED) != 0) {
       SDL_Delay(10);
       continue;
     }
-
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-    view::drawMainWindow(controller.state(), drafts, actions);
-    ImGui::Render();
-
-    SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x,
-                       io.DisplayFramebufferScale.y);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderClear(renderer);
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
-    SDL_RenderPresent(renderer);
-
     // After the frame: the view no longer holds references into the state.
-    for (const app::Action& action : actions) controller.apply(action);
-    actions.clear();
+    for (const app::Action& action :
+         drawFrame(renderer.get(), controller.state(), drafts)) {
+      controller.apply(action);
+    }
   }
-
-  ImGui_ImplSDLRenderer3_Shutdown();
-  ImGui_ImplSDL3_Shutdown();
-  ImGui::DestroyContext();
-  SDL_DestroyRenderer(renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
   return EXIT_SUCCESS;
 }

@@ -1,5 +1,5 @@
-#ifndef PROMPT_COLLECTION_SRC_MODEL_PROMPT_HPP
-#define PROMPT_COLLECTION_SRC_MODEL_PROMPT_HPP
+#ifndef PROMPT_COLLECTION_MODEL_PROMPT_HPP
+#define PROMPT_COLLECTION_MODEL_PROMPT_HPP
 
 #include <cstdint>
 #include <string>
@@ -11,6 +11,8 @@ using PromptId = std::int64_t;
 
 struct Prompt {
   PromptId id = 0;
+  // {}: designated initializers may skip these without GCC's
+  // -Wmissing-field-initializers.
   std::string title{};
   std::string positive{};
   std::string negative{};
@@ -20,4 +22,4 @@ struct Prompt {
 
 }  // namespace model
 
-#endif  // PROMPT_COLLECTION_SRC_MODEL_PROMPT_HPP
+#endif  // PROMPT_COLLECTION_MODEL_PROMPT_HPP

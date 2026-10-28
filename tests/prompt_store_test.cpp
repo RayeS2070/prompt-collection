@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <utility>
 #include <vector>
 
 #include "model/prompt.hpp"
@@ -11,7 +12,7 @@ namespace {
 auto openInMemory() -> model::PromptStore {
   auto store = model::PromptStore::open(":memory:");
   EXPECT_TRUE(store) << store.error();
-  return std::move(*store);
+  return std::move(store).value();
 }
 
 TEST(PromptStore, StartsEmpty) {

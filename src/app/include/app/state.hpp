@@ -1,5 +1,5 @@
-#ifndef PROMPT_COLLECTION_SRC_APP_STATE_HPP
-#define PROMPT_COLLECTION_SRC_APP_STATE_HPP
+#ifndef PROMPT_COLLECTION_APP_STATE_HPP
+#define PROMPT_COLLECTION_APP_STATE_HPP
 
 #include <optional>
 #include <string>
@@ -27,4 +27,4 @@ struct AppState {
 
 }  // namespace app
 
-#endif  // PROMPT_COLLECTION_SRC_APP_STATE_HPP
+#endif  // PROMPT_COLLECTION_APP_STATE_HPP

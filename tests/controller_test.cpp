@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <utility>
+
 #include "app/action.hpp"
 #include "model/prompt.hpp"
 #include "model/prompt_store.hpp"
@@ -13,7 +15,7 @@ namespace action = app::action;
 auto makeController() -> app::Controller {
   auto store = model::PromptStore::open(":memory:");
   EXPECT_TRUE(store) << store.error();
-  return app::Controller(std::move(*store));
+  return app::Controller(std::move(store).value());
 }
 
 TEST(Controller, SavesNewPromptAndKeepsItOpen) {

@@ -49,6 +49,7 @@ build/linux/gcc_debug/ui/prompt_collection [DATABASE]
 ```
 src/model/  модель: Prompt, PromptStore (SQLite); без UI
 src/app/    контроллер: AppState, Action, Controller
+            (у каждой библиотеки include/<lib>/ и src/)
 ui/         view на ImGui и главный цикл (SDL3 + SDL_Renderer)
 tests/      тесты модели и контроллера (GoogleTest)
 cmake/      CMake-модули (CPM, встраивание файлов в бинарник)
