@@ -18,10 +18,11 @@
 
 ## Сборка
 
-Требуется CMake 3.30+, Ninja, компилятор с поддержкой C++26 (GCC или
-Clang) и SQLite 3 из системы. SDL3, Dear ImGui и GoogleTest подтягиваются
-через [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) в кэш
-`~/.cache/CPM`.
+Требуется CMake 3.30+, Ninja и компилятор с поддержкой C++26 (GCC или
+Clang). Все библиотеки — SQLite, SDL3, Dear ImGui, GoogleTest — собираются
+из исходников, которые [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
+скачивает в кэш `~/.cache/CPM`. Из системы нужны только заголовки платформы,
+которые требует SDL (X11/Wayland, OpenGL и т.п.).
 
 ```sh
 cmake --preset gcc_debug
