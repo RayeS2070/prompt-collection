@@ -1,0 +1,66 @@
+# Builds and tests on Linux and Windows on every push and pull request.
+# macOS is in macos.yml, started by hand.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the run still going for it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.preset }})
+    runs-on: ubuntu-latest
+    # Arch: the same rolling GCC, Clang and CMake as the development machine;
+    # Ubuntu's are too old for C++26. SYS_PTRACE: LeakSanitizer needs it in a
+    # container.
+    container:
+      image: archlinux:latest
+      options: --cap-add=SYS_PTRACE
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [gcc_debug, clang_asan]
+    steps:
+      # git before checkout, or checkout falls back to a tarball; CPM clones
+      # with it too. The X11 and Wayland headers are for SDL's video drivers.
+      - name: Install tools
+        run: >
+          pacman -Syu --noconfirm --needed
+          base-devel git cmake ninja clang lld
+          libx11 libxext libxrandr libxcursor libxi libxss libxtst
+          wayland wayland-protocols libxkbcommon libdecor mesa
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+
+  windows:
+    name: Windows (MinGW gcc_debug)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # MSYS2 UCRT64: MinGW GCC, the same toolchain as the mingw_* presets.
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git
+          pacboy: gcc:p cmake:p ninja:p
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: cmake --preset gcc_debug
+      - name: Build
+        run: cmake --build --preset gcc_debug
+      - name: Test
+        run: ctest --preset gcc_debug

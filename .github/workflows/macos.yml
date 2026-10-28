@@ -1,0 +1,29 @@
+# Builds and tests on macOS when started by hand: Actions → macOS → Run
+# workflow. Not on every push: macOS minutes cost ten times Linux ones.
+name: macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: macOS (${{ matrix.preset }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [macos_debug]
+    steps:
+      # Homebrew LLVM: Apple Clang lags behind in C++26. The preset takes
+      # the compiler and libc++ from LLVM_ROOT.
+      - name: Install tools
+        run: |
+          brew install llvm ninja
+          echo "LLVM_ROOT=$(brew --prefix llvm)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v5
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
