@@ -30,16 +30,35 @@ cmake --build --preset gcc_debug
 ctest --preset gcc_debug
 ```
 
-Список пресетов: `cmake --list-presets`. Сборки кладутся в `build/`.
+Сборки кладутся в `build/<пресет>/`. `cmake --list-presets` показывает
+пресеты, доступные на текущей ОС:
+
+| Пресет | Где | Что |
+|---|---|---|
+| `gcc_debug`, `gcc_release` | Linux; Windows в шелле MSYS2 UCRT64 | GCC / MinGW GCC |
+| `clang_debug`, `clang_release` | Linux | Clang + LLD |
+| `clang_asan` | Linux | Clang с AddressSanitizer и UBSan |
+| `mingw_debug`, `mingw_release` | Linux | кросс-сборка под Windows (MinGW-w64), тесты через wine |
+| `macos_debug`, `macos_release` | macOS | Clang и libc++ из Homebrew LLVM; нужен `export LLVM_ROOT=$(brew --prefix llvm)` |
+
+## CI
+
+GitHub Actions ([.github/workflows](.github/workflows)):
+
+- `CI` — на каждый push и pull request: Linux (`gcc_debug`, `clang_asan`)
+  и Windows (MSYS2 UCRT64, `gcc_debug`).
+- `macOS` — только вручную: Actions → macOS → Run workflow.
 
 ## Запуск
 
 ```sh
-build/linux/gcc_debug/ui/prompt_collection [DATABASE]
+build/gcc_debug/ui/prompt_collection [DATABASE]
 ```
 
-По умолчанию база — `$XDG_DATA_HOME/pcollect/prompts.db`
-(`~/.local/share/pcollect/prompts.db`). Ctrl+S сохраняет промпт.
+По умолчанию база — `prompts.db` в каталоге данных пользователя:
+`~/.local/share/pcollect/` на Linux, `%APPDATA%\pcollect\` на Windows,
+`~/Library/Application Support/pcollect/` на macOS. Ctrl+S сохраняет
+промпт.
 
 ## Архитектура
 

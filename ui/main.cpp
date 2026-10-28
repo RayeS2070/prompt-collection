@@ -1,4 +1,7 @@
 #include <SDL3/SDL.h>
+// Once, here: SDL's own entry point, which hands main UTF-8 arguments on
+// Windows too.
+#include <SDL3/SDL_main.h>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
@@ -7,13 +10,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <expected>
-#include <filesystem>
 #include <format>
 #include <memory>
 #include <print>
 #include <span>
 #include <string>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -70,32 +71,17 @@ class ImGuiSession {
   }
 };
 
-// $XDG_DATA_HOME/pcollect/prompts.db, by default under ~/.local/share.
-auto defaultDatabasePath() -> std::filesystem::path {
-  std::filesystem::path base;
-  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) {
-    base = data;
-  } else if (const char* home = std::getenv("HOME"); home && *home) {
-    base = std::filesystem::path(home) / ".local" / "share";
-  } else {
-    base = std::filesystem::current_path();
+// prompts.db in the per-user data directory of the platform, which SDL
+// creates: ~/.local/share/pcollect on Linux, %APPDATA%\pcollect on Windows,
+// ~/Library/Application Support/pcollect on macOS. UTF-8, as SQLite wants
+// it; std::filesystem::path would go through the ANSI code page on Windows.
+auto defaultDatabasePath() -> std::expected<std::string, std::string> {
+  const std::unique_ptr<char, Destroy<SDL_free>> directory(
+      SDL_GetPrefPath(nullptr, "pcollect"));
+  if (!directory) {
+    return std::unexpected(std::format("SDL_GetPrefPath: {}", SDL_GetError()));
   }
-  return base / "pcollect" / "prompts.db";
-}
-
-// Opens the database, creating its directory first.
-auto openStore(const std::filesystem::path& path)
-    -> std::expected<model::PromptStore, std::string> {
-  if (path.has_parent_path()) {
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    if (error) {
-      return std::unexpected(std::format("cannot create {}: {}",
-                                         path.parent_path().string(),
-                                         error.message()));
-    }
-  }
-  return model::PromptStore::open(path.string());
+  return std::string(directory.get()) + "prompts.db";
 }
 
 // Draws one frame and returns what the user asked for in it.
@@ -123,8 +109,14 @@ auto drawFrame(SDL_Renderer* renderer, const app::AppState& state,
 // Usage: prompt_collection [DATABASE]
 auto main(int argc, char** argv) -> int {
   const std::span args(argv, static_cast<std::size_t>(argc));
-  auto store = openStore(args.size() > 1 ? std::filesystem::path(args[1])
-                                         : defaultDatabasePath());
+  const auto path = args.size() > 1
+                        ? std::expected<std::string, std::string>(args[1])
+                        : defaultDatabasePath();
+  if (!path) {
+    std::println(stderr, "{}", path.error());
+    return EXIT_FAILURE;
+  }
+  auto store = model::PromptStore::open(*path);
   if (!store) {
     std::println(stderr, "{}", store.error());
     return EXIT_FAILURE;

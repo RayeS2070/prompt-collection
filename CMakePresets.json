@@ -10,17 +10,11 @@
       "name": "base",
       "hidden": true,
       "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": true,
         "CPM_SOURCE_CACHE": "$env{HOME}/.cache/CPM"
-      }
-    },
-    {
-      "name": "ccache",
-      "hidden": true,
-      "cacheVariables": {
-        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       }
     },
     {
@@ -54,12 +48,8 @@
       "name": "linux",
       "hidden": true,
       "inherits": [
-        "base",
-        "ccache"
+        "base"
       ],
-      "description": "Native Linux build; shown only on a Linux host.",
-      "binaryDir": "${sourceDir}/build/linux/${presetName}",
-      "installDir": "${sourceDir}/install/linux/${presetName}",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -67,27 +57,31 @@
       }
     },
     {
-      "name": "wasm",
+      "name": "native_gcc",
       "hidden": true,
       "inherits": [
         "base"
       ],
-      "description": "WebAssembly through Emscripten, from any host. Set EMSCRIPTEN_ROOT to the emscripten directory: /usr/lib/emscripten on Arch, <emsdk>/upstream/emscripten with emsdk.",
-      "binaryDir": "${sourceDir}/build/wasm/${presetName}",
-      "installDir": "${sourceDir}/install/wasm/${presetName}",
-      "toolchainFile": "$env{EMSCRIPTEN_ROOT}/cmake/Modules/Platform/Emscripten.cmake"
-    },
-    {
-      "name": "gcc",
-      "hidden": true,
+      "description": "GCC on Linux, or MinGW GCC in an MSYS2 shell on Windows.",
       "cacheVariables": {
         "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": [
+          "Linux",
+          "Windows"
+        ]
       }
     },
     {
       "name": "clang",
       "hidden": true,
+      "inherits": [
+        "linux"
+      ],
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
@@ -95,167 +89,226 @@
       }
     },
     {
-      "name": "gcc_debug",
-      "displayName": "linux-gcc-debug",
+      "name": "mingw",
+      "hidden": true,
       "inherits": [
-        "linux",
-        "gcc",
+        "linux"
+      ],
+      "description": "Windows from Linux with the MinGW-w64 cross compiler; the tests run under wine.",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "Windows",
+        "CMAKE_SYSTEM_PROCESSOR": "x86_64",
+        "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+        "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+        "CMAKE_RC_COMPILER": "x86_64-w64-mingw32-windres",
+        "CMAKE_FIND_ROOT_PATH": "/usr/x86_64-w64-mingw32",
+        "CMAKE_FIND_ROOT_PATH_MODE_PROGRAM": "NEVER",
+        "CMAKE_FIND_ROOT_PATH_MODE_LIBRARY": "ONLY",
+        "CMAKE_FIND_ROOT_PATH_MODE_INCLUDE": "ONLY",
+        "CMAKE_CROSSCOMPILING_EMULATOR": "wine"
+      },
+      "environment": {
+        "WINEDEBUG": "-all"
+      }
+    },
+    {
+      "name": "macos",
+      "hidden": true,
+      "inherits": [
+        "base"
+      ],
+      "description": "Clang and libc++ from Homebrew LLVM: Apple Clang lags behind in C++26. Set LLVM_ROOT to $(brew --prefix llvm).",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "$env{LLVM_ROOT}/bin/clang",
+        "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++",
+        "CMAKE_EXE_LINKER_FLAGS": "-L$env{LLVM_ROOT}/lib/c++ -L$env{LLVM_ROOT}/lib/unwind -lunwind -Wl,-rpath,$env{LLVM_ROOT}/lib/c++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "gcc_debug",
+      "displayName": "gcc-debug",
+      "inherits": [
+        "native_gcc",
         "debug"
       ]
     },
     {
       "name": "gcc_release",
-      "displayName": "linux-gcc-release",
+      "displayName": "gcc-release",
       "inherits": [
-        "linux",
-        "gcc",
+        "native_gcc",
         "release"
       ]
     },
     {
       "name": "clang_debug",
-      "displayName": "linux-clang-debug",
+      "displayName": "clang-debug",
       "inherits": [
-        "linux",
         "clang",
         "debug"
       ]
     },
     {
       "name": "clang_release",
-      "displayName": "linux-clang-release",
+      "displayName": "clang-release",
       "inherits": [
-        "linux",
         "clang",
         "release"
       ]
     },
     {
       "name": "clang_asan",
-      "displayName": "linux-clang-asan",
+      "displayName": "clang-asan",
       "inherits": [
-        "linux",
         "clang",
         "asan"
       ]
     },
     {
-      "name": "wasm_debug",
-      "displayName": "wasm-debug",
+      "name": "mingw_debug",
+      "displayName": "mingw-debug (Windows from Linux)",
       "inherits": [
-        "wasm",
+        "mingw",
         "debug"
       ]
     },
     {
-      "name": "wasm_release",
-      "displayName": "wasm-release",
+      "name": "mingw_release",
+      "displayName": "mingw-release (Windows from Linux)",
       "inherits": [
-        "wasm",
+        "mingw",
+        "release"
+      ]
+    },
+    {
+      "name": "macos_debug",
+      "displayName": "macos-debug",
+      "inherits": [
+        "macos",
+        "debug"
+      ]
+    },
+    {
+      "name": "macos_release",
+      "displayName": "macos-release",
+      "inherits": [
+        "macos",
         "release"
       ]
     }
   ],
   "buildPresets": [
     {
-      "name": "linux",
-      "hidden": true,
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      }
-    },
-    {
       "name": "gcc_debug",
-      "configurePreset": "gcc_debug",
-      "inherits": [
-        "linux"
-      ]
+      "configurePreset": "gcc_debug"
     },
     {
       "name": "gcc_release",
-      "configurePreset": "gcc_release",
-      "inherits": [
-        "linux"
-      ]
+      "configurePreset": "gcc_release"
     },
     {
       "name": "clang_debug",
-      "configurePreset": "clang_debug",
-      "inherits": [
-        "linux"
-      ]
+      "configurePreset": "clang_debug"
     },
     {
       "name": "clang_release",
-      "configurePreset": "clang_release",
-      "inherits": [
-        "linux"
-      ]
+      "configurePreset": "clang_release"
     },
     {
       "name": "clang_asan",
-      "configurePreset": "clang_asan",
-      "inherits": [
-        "linux"
-      ]
+      "configurePreset": "clang_asan"
     },
     {
-      "name": "wasm_debug",
-      "configurePreset": "wasm_debug"
+      "name": "mingw_debug",
+      "configurePreset": "mingw_debug"
     },
     {
-      "name": "wasm_release",
-      "configurePreset": "wasm_release"
+      "name": "mingw_release",
+      "configurePreset": "mingw_release"
+    },
+    {
+      "name": "macos_debug",
+      "configurePreset": "macos_debug"
+    },
+    {
+      "name": "macos_release",
+      "configurePreset": "macos_release"
     }
   ],
   "testPresets": [
     {
-      "name": "linux",
+      "name": "base",
       "hidden": true,
       "output": {
         "outputOnFailure": true
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
       }
     },
     {
       "name": "gcc_debug",
       "configurePreset": "gcc_debug",
       "inherits": [
-        "linux"
+        "base"
       ]
     },
     {
       "name": "gcc_release",
       "configurePreset": "gcc_release",
       "inherits": [
-        "linux"
+        "base"
       ]
     },
     {
       "name": "clang_debug",
       "configurePreset": "clang_debug",
       "inherits": [
-        "linux"
+        "base"
       ]
     },
     {
       "name": "clang_release",
       "configurePreset": "clang_release",
       "inherits": [
-        "linux"
+        "base"
       ]
     },
     {
       "name": "clang_asan",
       "configurePreset": "clang_asan",
       "inherits": [
-        "linux"
+        "base"
+      ]
+    },
+    {
+      "name": "mingw_debug",
+      "configurePreset": "mingw_debug",
+      "inherits": [
+        "base"
+      ]
+    },
+    {
+      "name": "mingw_release",
+      "configurePreset": "mingw_release",
+      "inherits": [
+        "base"
+      ]
+    },
+    {
+      "name": "macos_debug",
+      "configurePreset": "macos_debug",
+      "inherits": [
+        "base"
+      ]
+    },
+    {
+      "name": "macos_release",
+      "configurePreset": "macos_release",
+      "inherits": [
+        "base"
       ]
     }
   ]
